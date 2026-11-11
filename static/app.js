@@ -126,6 +126,15 @@ function centerDistance(a, b) {
   );
 }
 
+function median(values) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2
+    ? sorted[middle]
+    : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
 function normaliseBox(box, frameWidth, frameHeight) {
   const x = clamp(box.originX / frameWidth, 0, 1);
   const y = clamp(box.originY / frameHeight, 0, 1);
@@ -730,10 +739,13 @@ function createTrack(detection, now, rememberedId = null) {
     analysisPending: false,
     analysisError: false,
     analysis: null,
+    ageHistory: [],
     ageSmoothed: null,
     maleProbability: null,
     gender: null,
+    expressionHistory: [],
     expressionScores: null,
+    expressionKey: null,
     expression: null,
     lastConfidencePercent: null,
     labelPlacement: null,
@@ -1069,8 +1081,17 @@ async function analyseTrack(track) {
     }
 
     if (age !== null) {
-      if (track.ageSmoothed === null) track.ageSmoothed = age;
-      else track.ageSmoothed = track.ageSmoothed * 0.62 + age * 0.38;
+      // The age model jitters by several years between inferences. Keep a
+      // short history and smooth the median so one bad frame cannot swing the
+      // displayed estimate, while still adapting to real changes.
+      track.ageHistory.push(age);
+      if (track.ageHistory.length > 7) track.ageHistory.shift();
+      const medianAge = median(track.ageHistory);
+      if (medianAge !== null) {
+        track.ageSmoothed = track.ageSmoothed === null
+          ? medianAge
+          : track.ageSmoothed * 0.55 + medianAge * 0.45;
+      }
     }
 
     if (maleProbability !== null) {
@@ -1124,19 +1145,39 @@ function updateExpressionScores(track, sorted) {
   const incoming = {};
   for (const item of sorted) incoming[item.expression] = item.probability;
 
-  if (!track.expressionScores) {
-    track.expressionScores = { ...incoming };
-  } else {
-    const keys = new Set([...Object.keys(track.expressionScores), ...Object.keys(incoming)]);
-    keys.forEach((key) => {
-      const previous = track.expressionScores[key] || 0;
-      const next = incoming[key] || 0;
-      track.expressionScores[key] = previous * 0.58 + next * 0.42;
-    });
+  // Ignore weak, ambiguous frames so a single unclear prediction cannot
+  // change the label. Keep the first sample so a face gets an initial value.
+  const topProbability = sorted[0]?.probability ?? 0;
+  if (!track.expressionHistory.length || topProbability >= 0.35) {
+    track.expressionHistory.push(incoming);
+    if (track.expressionHistory.length > 5) track.expressionHistory.shift();
   }
 
-  const best = Object.entries(track.expressionScores).sort((a, b) => b[1] - a[1])[0];
-  if (best) track.expression = EXPRESSION_LABELS[best[0]] || 'Uncertain';
+  const history = track.expressionHistory;
+  if (!history.length) return;
+
+  // Average the full probability distribution across recent frames. This is
+  // more stable than following a single frame's argmax.
+  const keys = new Set(history.flatMap((scores) => Object.keys(scores)));
+  const averaged = {};
+  keys.forEach((key) => {
+    averaged[key] = history.reduce((sum, scores) => sum + (scores[key] || 0), 0) / history.length;
+  });
+  track.expressionScores = averaged;
+
+  const ranked = Object.entries(averaged).sort((a, b) => b[1] - a[1]);
+  const best = ranked[0];
+  if (!best) return;
+
+  // Require a clear advantage before switching labels, which prevents
+  // flickering between two nearly tied expressions.
+  if (track.expressionKey && best[0] !== track.expressionKey) {
+    const current = ranked.find(([key]) => key === track.expressionKey);
+    if (current && best[1] - current[1] < 0.08) return;
+  }
+
+  track.expressionKey = best[0];
+  track.expression = EXPRESSION_LABELS[best[0]] || 'Uncertain';
 }
 
 function renderAnalysis(track) {
