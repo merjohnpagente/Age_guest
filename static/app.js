@@ -540,7 +540,9 @@ function renderLoop(now) {
     detectFaces(now);
   }
 
-  renderTracks(now, dt);
+  // Detection can block for seconds. Render with the current time so a track
+  // refreshed at the end of detection is not immediately treated as stale.
+  renderTracks(performance.now(), dt);
 }
 
 function detectFaces(now) {
@@ -572,7 +574,10 @@ function detectFaces(now) {
   APP.reidWindow = clamp(8000 + elapsed * 2 + APP.lastAnalysisDuration * 1.5, 8000, 120000);
   APP.detectInterval = clamp(elapsed * 1.65 + 10, 48, 150);
 
-  processDetections(result, now);
+  // `now` was captured before the synchronous detector call. On slow devices
+  // that call can take seconds, making brand-new tracks look stale. Use the
+  // real completion time so tracking never expires fresh detections.
+  processDetections(result, performance.now());
 }
 
 function processDetections(result, now) {
@@ -655,7 +660,10 @@ function processDetections(result, now) {
   });
 
   APP.tracks.forEach((track) => {
-    if (now - track.lastSeen > APP.trackRemoveAfter) {
+    // Keep the track visible and matchable while its own analysis is running.
+    // Inference can block detection for seconds on slower devices, and removing
+    // the track mid-analysis would hand the face a new temporary ID.
+    if (!track.analysisPending && now - track.lastSeen > APP.trackRemoveAfter) {
       // Removed during render so all DOM state is cleaned in one place.
       track.expired = true;
     }
@@ -758,6 +766,7 @@ function clearTracks() {
   APP.tracks = [];
   APP.trackById.clear();
   APP.faceMemory = [];
+  APP.nextFaceId = 1;
   stateFaceCount(0);
 }
 
@@ -836,7 +845,7 @@ function renderTracks(now, dt) {
     }
 
     const staleFor = now - track.lastSeen;
-    if (staleFor > APP.trackRemoveAfter) {
+    if (!track.analysisPending && staleFor > APP.trackRemoveAfter) {
       removals.push(track);
       continue;
     }
@@ -845,7 +854,7 @@ function renderTracks(now, dt) {
     const projected = projectBox(track.current);
     if (projected.w < 8 || projected.h < 8) continue;
 
-    const hidden = staleFor > APP.trackHideAfter;
+    const hidden = !track.analysisPending && staleFor > APP.trackHideAfter;
     track.root.classList.toggle('is-stale', hidden);
     track.elements.box.style.transform = `translate3d(${projected.x.toFixed(2)}px, ${projected.y.toFixed(2)}px, 0)`;
     track.elements.box.style.width = `${projected.w.toFixed(2)}px`;
