@@ -19,6 +19,7 @@ const APP = {
   detectorFailed: false,
   detectorDelegate: 'GPU',
   analysisReady: false,
+  analysisSettled: false,
   ageReady: false,
   expressionReady: false,
   analysisBusy: false,
@@ -177,7 +178,7 @@ function refreshStatus() {
   if (!APP.analysisReady) {
     safeText(
       el.brandStatus,
-      APP.detectorReady ? 'Detection live · loading AI estimates' : 'Loading AI',
+      APP.analysisSettled ? 'Detection live · AI estimates unavailable' : 'Detection live · loading AI estimates',
     );
     return;
   }
@@ -226,6 +227,8 @@ function showCameraError(error) {
   APP.cameraOn = false;
   APP.cameraStarting = false;
   stopRenderLoop();
+  clearTracks();
+  closeInfo();
 
   if (el.video.srcObject) {
     el.video.srcObject.getTracks().forEach((track) => track.stop());
@@ -389,6 +392,7 @@ async function loadModels() {
   const analysisTask = initialiseAnalysis();
 
   const [detectorResult, analysisResult] = await Promise.allSettled([detectorTask, analysisTask]);
+  APP.analysisSettled = true;
 
   if (detectorResult.status === 'rejected') {
     APP.detectorFailed = true;
@@ -403,6 +407,10 @@ async function loadModels() {
 
   APP.analysisReady = APP.ageReady || APP.expressionReady;
   refreshStatus();
+
+  if (!APP.analysisReady) {
+    APP.tracks.forEach((track) => markAnalysisError(track, true));
+  }
 
   if (APP.detectorReady && APP.cameraOn) startRenderLoop();
   if (APP.analysisReady && APP.cameraOn) scheduleAnalysisLoop();
@@ -724,6 +732,10 @@ function createTrack(detection, now, rememberedId = null) {
     labelSize: null,
     expired: false,
   };
+
+  if (APP.analysisSettled && !APP.analysisReady) {
+    markAnalysisError(track, true);
+  }
 
   return track;
 }
