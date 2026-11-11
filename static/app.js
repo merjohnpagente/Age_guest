@@ -1004,6 +1004,9 @@ async function analyseTrack(track) {
 
   const generation = APP.cameraGeneration;
   const analysisStarted = performance.now();
+  // Detection can run while inference is awaiting. Keep recently seen faces
+  // matchable through the whole analysis so temporary IDs do not churn.
+  APP.reidWindow = Math.max(APP.reidWindow, 120000);
   APP.analysisBusy = true;
   track.analysisPending = true;
   track.lastAnalysisAt = analysisStarted;
