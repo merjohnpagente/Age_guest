@@ -1086,6 +1086,11 @@ async function analyseTrack(track) {
     markAnalysisError(track, true);
   } finally {
     APP.lastAnalysisDuration = performance.now() - analysisStarted;
+    APP.reidWindow = clamp(
+      8000 + APP.lastDetectionDuration * 2 + APP.lastAnalysisDuration * 1.5,
+      8000,
+      120000,
+    );
     APP.analysisBusy = false;
     track.analysisPending = false;
   }
