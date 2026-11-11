@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050505">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Private, on-device live face detection with experimental AI age, gender, and expression estimates.">
+  <title>FACELENS — Live AI face analysis</title>
+  <link rel="icon" href="./static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./static/app.css">
+</head>
+<body data-camera="booting">
+  <div class="app" id="app">
+    <video id="camera" class="camera" autoplay muted playsinline aria-label="Live camera preview"></video>
+    <div class="camera-tint" aria-hidden="true"></div>
+    <div class="camera-grain" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div class="brand" aria-label="FaceLens live face analysis">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="square"/>
+            <circle cx="12" cy="12" r="2.6" fill="currentColor"/>
+          </svg>
+        </span>
+        <span class="brand-copy">
+          <span class="brand-line">
+            <span class="live-dot" id="live-dot" aria-hidden="true"></span>
+            <strong id="live-label">STARTING</strong>
+            <span class="brand-separator" aria-hidden="true">/</span>
+            <span class="brand-name">FACELENS</span>
+          </span>
+          <span class="brand-status" id="brand-status">Requesting camera access</span>
+        </span>
+      </div>
+
+      <div class="top-actions">
+        <span class="face-count" id="face-count" aria-live="polite" hidden>0 faces</span>
+        <button class="icon-btn" id="stop-button" type="button" aria-label="Stop camera" title="Stop camera">
+          <svg class="icon-stop" viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="6.5" width="11" height="11" rx="1" fill="currentColor"/></svg>
+          <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5-10-6.5Z" fill="currentColor"/></svg>
+        </button>
+        <button class="icon-btn" id="fullscreen-button" type="button" aria-label="Enter fullscreen" title="Fullscreen">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path class="fs-enter" d="M9 4H4v5M15 4h5v5M20 15v5h-5M4 15v5h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square"/>
+            <path class="fs-exit" d="M4 9h5V4M20 9h-5V4M15 20v-5h5M9 20v-5H4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square"/>
+          </svg>
+        </button>
+        <button class="icon-btn" id="info-button" type="button" aria-label="About this AI" title="About this AI">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="8.25" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M12 10.6v6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+            <circle cx="12" cy="7.6" r="1" fill="currentColor"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="stage" aria-label="Live face analysis">
+      <div class="face-overlay" id="face-overlay" aria-hidden="true"></div>
+      <div class="scan-hint" id="scan-hint" hidden>
+        <span class="scan-hint-rule" aria-hidden="true"></span>
+        <span>Scanning for faces</span>
+      </div>
+    </main>
+
+    <section class="gate" id="gate" aria-labelledby="gate-title">
+      <div class="gate-inner">
+        <div class="gate-kicker"><span class="kicker-line" aria-hidden="true"></span> PRIVATE ON-DEVICE VISION</div>
+        <h1 id="gate-title">Live face analysis.</h1>
+        <p class="gate-copy" id="gate-copy">Your camera is starting. Face detection and AI estimates run locally in this browser.</p>
+        <div class="gate-actions">
+          <button class="primary-button" id="gate-action" type="button" hidden>
+            <span id="gate-action-label">Enable camera</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square"/></svg>
+          </button>
+          <div class="gate-progress" id="gate-progress">
+            <span class="spinner" aria-hidden="true"></span>
+            <span id="gate-progress-label">Requesting camera permission</span>
+          </div>
+        </div>
+        <p class="gate-note"><span class="lock-glyph" aria-hidden="true">⌁</span> Nothing is uploaded. Camera frames stay on this device.</p>
+      </div>
+      <div class="gate-art" aria-hidden="true">
+        <span class="reticle reticle-a"></span>
+        <span class="reticle reticle-b"></span>
+        <span class="reticle-label">LOCAL<br>INFERENCE</span>
+      </div>
+    </section>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+    <footer class="bottombar">
+      <div class="privacy-chip">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 10V7.8a4.5 4.5 0 0 1 9 0V10M6 10h12v9H6z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M12 14v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <span><b>LOCAL AI</b><span class="privacy-separator">·</span>No footage uploaded</span>
+      </div>
+      <div class="ai-note">Age, gender &amp; expression are <b>AI estimates</b></div>
+    </footer>
+
+    <div class="info-sheet-backdrop" id="info-backdrop" hidden></div>
+    <section class="info-sheet" id="info-sheet" role="dialog" aria-modal="true" aria-labelledby="info-title" hidden>
+      <div class="info-sheet-head">
+        <span class="info-mark" aria-hidden="true">i</span>
+        <button class="close-btn" id="close-info" type="button" aria-label="Close information">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.6"/></svg>
+        </button>
+      </div>
+      <p class="info-eyebrow">ABOUT THE ANALYSIS</p>
+      <h2 id="info-title">Vision that stays<br>on your device.</h2>
+      <p>This page uses your camera to find faces in real time. Detection runs with MediaPipe. Experimental age, gender, and expression predictions are generated on-device by a small neural network.</p>
+      <dl class="info-list">
+        <div><dt>Detection</dt><dd>MediaPipe BlazeFace</dd></div>
+        <div><dt>AI estimates</dt><dd>Face-api (local TensorFlow.js)</dd></div>
+        <div><dt>Confidence</dt><dd>Face-detection certainty</dd></div>
+        <div><dt>Face IDs</dt><dd>Temporary and anonymous</dd></div>
+      </dl>
+      <p class="info-callout">Age, gender, and expression are experimental AI estimates and can be wrong. They should never be treated as fact or used to make decisions about a person. No video, image, or result is sent anywhere.</p>
+      <button class="secondary-button" id="info-dismiss" type="button">Back to camera</button>
+    </section>
+
+    <noscript>
+      <div class="noscript">This experience needs JavaScript and camera access.</div>
+    </noscript>
+  </div>
+
+  <script src="./static/vendor/faceapi/face-api.js"></script>
+  <script type="module" src="./static/app.js"></script>
+</body>
+</html>
